@@ -21,16 +21,17 @@ def allowed_excel_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXCEL_EXTENSIONS
 
 def process_excel_file(file_stream):
-    """Process uploaded Excel file and extract Patient ID and Remark data."""
+    """Process uploaded Excel file and extract Patient ID, Remark, and Agent Name data."""
     try:
         from openpyxl import load_workbook
         
         wb = load_workbook(file_stream)
         ws = wb.active
         
-        # Find the Patient ID and Remark columns
+        # Find the Patient ID, Remark, and Agent Name columns
         patient_id_col = None
         remark_col = None
+        agent_name_col = None
         
         # Look for headers in the first row
         for col in range(1, ws.max_column + 1):
@@ -39,6 +40,8 @@ def process_excel_file(file_stream):
                 patient_id_col = col
             elif 'remark' in cell_value:
                 remark_col = col
+            elif 'agent' in cell_value and 'name' in cell_value:
+                agent_name_col = col
         
         if not patient_id_col:
             raise Exception("Patient ID column not found in Excel file")
@@ -46,18 +49,25 @@ def process_excel_file(file_stream):
         if not remark_col:
             raise Exception("Remark column not found in Excel file")
         
-        # Extract data
+        # Extract data - now returns list of records for each patient ID
         excel_data = {}
         for row in range(2, ws.max_row + 1):  # Skip header row
             patient_id = str(ws.cell(row=row, column=patient_id_col).value or '').strip()
             remark = str(ws.cell(row=row, column=remark_col).value or '').strip()
+            agent_name = str(ws.cell(row=row, column=agent_name_col).value or '').strip() if agent_name_col else ''
             
             # Clean up Patient ID - remove .0 if it's a float
             if patient_id.endswith('.0'):
                 patient_id = patient_id[:-2]
             
             if patient_id:  # Only add non-empty patient IDs
-                excel_data[patient_id] = remark
+                if patient_id not in excel_data:
+                    excel_data[patient_id] = []
+                
+                excel_data[patient_id].append({
+                    'remark': remark,
+                    'agent_name': agent_name
+                })
         
         return excel_data
         
@@ -108,9 +118,11 @@ def process_appointments_excel(file_stream):
             pid = pid[:-2]
         record['Pat ID'] = pid  # Standardize the key name
         
-        # Ensure Remark exists
+        # Ensure Remark and Agent Name exist
         if 'Remark' not in record:
             record['Remark'] = ''
+        if 'Agent Name' not in record:
+            record['Agent Name'] = ''
         
         # Skip empty rows (no Pat ID)
         if pid:
@@ -119,22 +131,42 @@ def process_appointments_excel(file_stream):
     return appointments
 
 def update_appointments_with_remarks(appointments, excel_data):
-    """Update appointments with remarks from Excel data based on Patient ID matching."""
+    """Update appointments with remarks and agent names from Excel data based on Patient ID matching.
+    Creates separate rows for each match when Patient ID appears multiple times."""
+    updated_appointments = []
     updated_count = 0
     
     for appointment in appointments:
         patient_id = str(appointment.get('Pat ID', '')).strip()
+        matches_found = False
         
         # Try exact match first
         if patient_id and patient_id in excel_data:
-            appointment['Remark'] = excel_data[patient_id]
-            updated_count += 1
+            # Create a separate row for each match
+            for match_data in excel_data[patient_id]:
+                new_appointment = appointment.copy()  # Copy all original data
+                new_appointment['Remark'] = match_data['remark']
+                new_appointment['Agent Name'] = match_data['agent_name']
+                updated_appointments.append(new_appointment)
+                updated_count += 1
+                matches_found = True
         # Try with .0 suffix (in case Excel has float format)
         elif patient_id and f"{patient_id}.0" in excel_data:
-            appointment['Remark'] = excel_data[f"{patient_id}.0"]
-            updated_count += 1
+            for match_data in excel_data[f"{patient_id}.0"]:
+                new_appointment = appointment.copy()  # Copy all original data
+                new_appointment['Remark'] = match_data['remark']
+                new_appointment['Agent Name'] = match_data['agent_name']
+                updated_appointments.append(new_appointment)
+                updated_count += 1
+                matches_found = True
+        
+        # If no matches found, add original appointment with empty remark and agent name
+        if not matches_found:
+            appointment['Remark'] = ''
+            appointment['Agent Name'] = ''
+            updated_appointments.append(appointment)
     
-    return updated_count
+    return updated_appointments, updated_count
 
 def create_excel_from_pdf_data(appointments, filename):
     """Create Excel file from processed appointment data with all columns."""
@@ -150,13 +182,15 @@ def create_excel_from_pdf_data(appointments, filename):
     for appointment in appointments:
         all_headers.update(appointment.keys())
     
-    # Convert to list and ensure Pat ID and Remark are at the end for visibility
+    # Convert to list and ensure Pat ID, Remark, and Agent Name are at the end for visibility
     headers = list(all_headers)
     if 'Pat ID' in headers:
         headers.remove('Pat ID')
     if 'Remark' in headers:
         headers.remove('Remark')
-    headers.extend(['Pat ID', 'Remark'])  # Put these at the end
+    if 'Agent Name' in headers:
+        headers.remove('Agent Name')
+    headers.extend(['Pat ID', 'Remark', 'Agent Name'])  # Put these at the end
     
     # Set headers
     for col, header in enumerate(headers, 1):
@@ -236,9 +270,12 @@ def upload_file():
     # Process remarks Excel
     try:
         excel_data = process_excel_file(remarks_file)
-        updated_count = update_appointments_with_remarks(processed_appointments, excel_data)
+        updated_appointments, updated_count = update_appointments_with_remarks(processed_appointments, excel_data)
+        
+        # Update the global processed_appointments with the new data
+        processed_appointments = updated_appointments
 
-        flash(f'Successfully updated {updated_count} appointments with remarks.')
+        flash(f'Successfully updated {updated_count} appointments with remarks and agent names. Total rows: {len(processed_appointments)}')
     except Exception as e:
         flash(f'Error processing Remarks Excel: {str(e)}')
         return redirect(url_for('index'))

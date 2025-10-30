@@ -267,12 +267,13 @@
                 <tr>
                     {% if appointments %}
                         {% for header in appointments[0].keys() %}
-                            {% if header != 'Pat ID' and header != 'Remark' %}
+                            {% if header != 'Pat ID' and header != 'Remark' and header != 'Agent Name' %}
                                 <th>{{ header }}</th>
                             {% endif %}
                         {% endfor %}
                         <th>Pat ID</th>
                         <th>Remark</th>
+                        <th>Agent Name</th>
                     {% endif %}
                 </tr>
             </thead>
@@ -280,12 +281,13 @@
                 {% for appointment in appointments %}
                 <tr>
                     {% for header in appointment.keys() %}
-                        {% if header != 'Pat ID' and header != 'Remark' %}
+                        {% if header != 'Pat ID' and header != 'Remark' and header != 'Agent Name' %}
                             <td>{{ appointment[header] or '' }}</td>
                         {% endif %}
                     {% endfor %}
                     <td>{{ appointment['Pat ID'] or '' }}</td>
                     <td>{{ appointment.Remark or '' }}</td>
+                    <td>{{ appointment['Agent Name'] or '' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
