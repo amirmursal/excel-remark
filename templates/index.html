@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Excel Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+
+        .upload-section {
+            margin: 30px 0;
+        }
+
+        .upload-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 30px 20px;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f0f4ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+
+        .upload-subtext {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 20px 0;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9ff;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+
+        .flash-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .flash-error {
+            background-color: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+
+        .flash-success {
+            background-color: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+        }
+
+        .flash-info {
+            background-color: #e6f3ff;
+            color: #0066cc;
+            border: 1px solid #b3d9ff;
+        }
+
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .features h3 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            color: #666;
+            position: relative;
+            padding-left: 25px;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            color: #667eea;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🏥📄➡️📊</div>
+        <h1>Medical Appointments Excel Matcher</h1>
+        
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        {% if 'Successfully processed' in message %}
+                            <div class="flash-message flash-success">{{ message }}</div>
+                        {% elif 'Error' in message or 'No' in message %}
+                            <div class="flash-message flash-error">{{ message }}</div>
+                        {% else %}
+                            <div class="flash-message flash-info">{{ message }}</div>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Single form for two Excel uploads -->
+        <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+            <div class="upload-section">
+                <h3>Step 1: Upload Appointments Excel</h3>
+                <div class="upload-area" id="appts-upload-area">
+                    <div class="upload-icon">📊</div>
+                    <div class="upload-text">Click to select Appointments Excel or drag & drop</div>
+                    <div class="upload-subtext">Must include Office, Appt Date, Time, Pat ID, Pat Name, Group No., Insurance Note</div>
+                    <input type="file" id="appts-file-input" name="appointments_file" accept=".xlsx,.xls" required>
+                </div>
+
+                <div class="file-info" id="appts-file-info">
+                    <div class="file-name" id="appts-file-name"></div>
+                    <div class="file-size" id="appts-file-size"></div>
+                </div>
+            </div>
+
+            <div class="upload-section">
+                <h3>Step 2: Upload Remarks Excel</h3>
+                <div class="upload-area" id="remarks-upload-area">
+                    <div class="upload-icon">📝</div>
+                    <div class="upload-text">Click to select Remarks Excel</div>
+                    <div class="upload-subtext">Must have "Patient ID" and "Remark" columns</div>
+                    <input type="file" id="remarks-file-input" name="remarks_file" accept=".xlsx,.xls" required>
+                </div>
+                
+                <div class="file-info" id="remarks-file-info">
+                    <div class="file-name" id="remarks-file-name"></div>
+                    <div class="file-size" id="remarks-file-size"></div>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" id="submit-btn" disabled>Process Excel Files</button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing your Excel files...</p>
+        </div>
+
+        <div class="features">
+            <h3>Extracted Data Columns</h3>
+            <ul class="feature-list">
+                <li><strong>Office</strong> - Medical office or clinic name</li>
+                <li><strong>Appt Date</strong> - Appointment date</li>
+                <li><strong>Time</strong> - Appointment time</li>
+                <li><strong>Pat ID</strong> - Patient identification number</li>
+                <li><strong>Pat Name</strong> - Patient name</li>
+                <li><strong>Group No.</strong> - Group or policy number</li>
+                <li><strong>Insurance Note</strong> - Insurance information</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const apptsUploadArea = document.getElementById('appts-upload-area');
+        const apptsFileInput = document.getElementById('appts-file-input');
+        const apptsFileInfo = document.getElementById('appts-file-info');
+        const apptsFileName = document.getElementById('appts-file-name');
+        const apptsFileSize = document.getElementById('appts-file-size');
+
+        const remarksUploadArea = document.getElementById('remarks-upload-area');
+        const remarksFileInput = document.getElementById('remarks-file-input');
+        const remarksFileInfo = document.getElementById('remarks-file-info');
+        const remarksFileName = document.getElementById('remarks-file-name');
+        const remarksFileSize = document.getElementById('remarks-file-size');
+        
+        const submitBtn = document.getElementById('submit-btn');
+        const uploadForm = document.getElementById('upload-form');
+        const loading = document.getElementById('loading');
+
+        // Appointments Excel handling
+        apptsUploadArea.addEventListener('click', () => apptsFileInput.click());
+        apptsFileInput.addEventListener('change', () => handleFileSelect(apptsFileInput, apptsFileInfo, apptsFileName, apptsFileSize));
+
+        // Remarks Excel handling
+        remarksUploadArea.addEventListener('click', () => remarksFileInput.click());
+        remarksFileInput.addEventListener('change', () => handleFileSelect(remarksFileInput, remarksFileInfo, remarksFileName, remarksFileSize));
+
+        // Drag and drop for Appointments Excel
+        apptsUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            apptsUploadArea.classList.add('dragover');
+        });
+
+        apptsUploadArea.addEventListener('dragleave', () => {
+            apptsUploadArea.classList.remove('dragover');
+        });
+
+        apptsUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            apptsUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                apptsFileInput.files = files;
+                handleFileSelect(apptsFileInput, apptsFileInfo, apptsFileName, apptsFileSize);
+            }
+        });
+
+        // Drag and drop for Remarks Excel
+        remarksUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            remarksUploadArea.classList.add('dragover');
+        });
+
+        remarksUploadArea.addEventListener('dragleave', () => {
+            remarksUploadArea.classList.remove('dragover');
+        });
+
+        remarksUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            remarksUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                remarksFileInput.files = files;
+                handleFileSelect(remarksFileInput, remarksFileInfo, remarksFileName, remarksFileSize);
+            }
+        });
+
+        // Function to check if both files are uploaded and enable/disable button
+        function checkFilesAndUpdateButton() {
+            const hasApptsFile = apptsFileInput.files.length > 0;
+            const hasRemarksFile = remarksFileInput.files.length > 0;
+            
+            if (hasApptsFile && hasRemarksFile) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Process Excel Files';
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Upload Both Files to Process';
+            }
+        }
+
+        // Form submission
+        uploadForm.addEventListener('submit', (e) => {
+            if (apptsFileInput.files.length === 0 || remarksFileInput.files.length === 0) {
+                e.preventDefault();
+                alert('Please upload both Excel files before processing.');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            loading.style.display = 'block';
+        });
+
+        function handleFileSelect(fileInput, fileInfo, fileName, fileSize) {
+            const file = fileInput.files[0];
+            if (file) {
+                // Check file type (Excel)
+                if (!file.type.includes('spreadsheet') && !file.name.match(/\.(xlsx|xls)$/i)) {
+                    alert('Please select an Excel file (.xlsx or .xls).');
+                    fileInput.value = '';
+                    checkFilesAndUpdateButton();
+                    return;
+                }
+                
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                fileInfo.style.display = 'block';
+            } else {
+                fileInfo.style.display = 'none';
+            }
+            
+            // Check if both files are uploaded and update button
+            checkFilesAndUpdateButton();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
